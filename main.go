@@ -100,17 +100,23 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	uptime := time.Since(activeAt).Truncate(time.Second)
 
 	var statusColor string
+	var responseCode int
 	switch status {
 	case "healthy":
 		statusColor = "green"
+		responseCode = http.StatusOK // 200
 	case "inactive":
 		statusColor = "darkslategray"
+		responseCode = http.StatusCreated // 201
 	case "degraded":
 		statusColor = "orangered"
+		responseCode = http.StatusAccepted // 202
 	case "down":
 		statusColor = "red"
+		responseCode = http.StatusNoContent // 204
 	default:
 		statusColor = "darkslategray"
+		responseCode = http.StatusServiceUnavailable // 503
 	}
 
 	response := fmt.Sprintf(`<!DOCTYPE html>
@@ -167,7 +173,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 </html>`, statusColor, int(uptime.Seconds()), status, uptime.String())
 
 	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(responseCode)
 	w.Write([]byte(response))
 }
 
