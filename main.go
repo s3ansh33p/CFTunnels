@@ -20,14 +20,16 @@ var (
 	apiKey      string
 	status      string
 	activeAt    time.Time
+	inactiveAt  time.Time
 	statusMutex sync.RWMutex
 )
 
 type ApiResponse struct {
 	Success bool `json:"success"`
 	Result  struct {
-		Status        string    `json:"status"`
-		ConnsActiveAt time.Time `json:"conns_active_at"`
+		Status          string    `json:"status"`
+		ConnsActiveAt   time.Time `json:"conns_active_at"`
+		ConnsInActiveAt time.Time `json:"conns_inactive_at"`
 	} `json:"result"`
 }
 
@@ -84,6 +86,7 @@ func pollAPI() {
 			statusMutex.Lock()
 			status = apiResponse.Result.Status
 			activeAt = apiResponse.Result.ConnsActiveAt
+			inactiveAt = apiResponse.Result.ConnsInActiveAt
 			statusMutex.Unlock()
 		} else {
 			log.Printf("API response indicates failure: %s", string(body))
@@ -97,7 +100,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	statusMutex.RLock()
 	defer statusMutex.RUnlock()
 
+  activeString := "Uptime"
 	uptime := time.Since(activeAt).Truncate(time.Second)
+	if activeAt.IsZero() {
+		activeString = "Downtime"
+		uptime = time.Since(inactiveAt).Truncate(time.Second)
+	}
 
 	var statusColor string
 	var responseCode int
@@ -110,10 +118,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		responseCode = http.StatusCreated // 201
 	case "degraded":
 		statusColor = "orangered"
-		responseCode = http.StatusAccepted // 202
+		responseCode = http.StatusCreated // 201
 	case "down":
 		statusColor = "red"
-		responseCode = http.StatusNoContent // 204
+		responseCode = http.StatusCreated // 201
 	default:
 		statusColor = "darkslategray"
 		responseCode = http.StatusServiceUnavailable // 503
@@ -168,9 +176,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 <body>
 	<h1>Server Status</h1>
 	<div class="status-pill">%s</div>
-	<p>Uptime: <span id="uptime">%s</span></p>
+	<p>%s: <span id="uptime">%s</span></p>
 </body>
-</html>`, statusColor, int(uptime.Seconds()), status, uptime.String())
+</html>`, statusColor, int(uptime.Seconds()), status, activeString, uptime.String())
 
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(responseCode)
